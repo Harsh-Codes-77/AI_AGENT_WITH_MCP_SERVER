@@ -1,6 +1,7 @@
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { createPost } from "./mcp.tool.js";
 import { z } from "zod";
 
 const server = new McpServer({
@@ -12,23 +13,36 @@ const server = new McpServer({
 
 const app = express();
 
+
 server.tool(
     "addTwoNumbers",
-    "Add Two Numbers",
+    "Add two numbers",
     {
         a: z.number(),
         b: z.number()
     },
     async (arg) => {
         const { a, b } = arg;
-        return[
-            {
-                type: "text",
-                text: `The sum of ${a} and ${b} is ${a + b}`
-            }
-        ]
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: `The sum of ${a} and ${b} is ${a + b}`
+                }
+            ]
+        }
     }
 )
+
+server.tool(
+    "createPost",
+    "Create a post on X formally known as Twitter ", {
+    status: z.string()
+}, async (arg) => {
+    const { status } = arg;
+    return createPost(status);
+})
+
 
 // to support multiple simultaneous connections we have a lookup object from
 // sessionId to transport
@@ -36,20 +50,20 @@ const transports = {};
 
 app.get("/sse", async (req, res) => {
     const transport = new SSEServerTransport('/messages', res);
-    transports[transport.sessionId] = transport;
+    transports[ transport.sessionId ] = transport;
     res.on("close", () => {
-    delete transports[transport.sessionId];
+        delete transports[ transport.sessionId ];
     });
     await server.connect(transport);
 });
 
 app.post("/messages", async (req, res) => {
     const sessionId = req.query.sessionId;
-    const transport = transports[sessionId];
+    const transport = transports[ sessionId ];
     if (transport) {
-    await transport.handlePostMessage(req, res);
+        await transport.handlePostMessage(req, res);
     } else {
-    res.status(400).send('No transport found for sessionId');
+        res.status(400).send('No transport found for sessionId');
     }
 });
 
